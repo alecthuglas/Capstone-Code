@@ -1,0 +1,276 @@
+///////////// SMART AIR FILTER CAPSTONE CODE /////////////////////////////////////// 
+///////////// CREATED BY: ALEC DOUGLAS       ///////////////////////////////////////
+///////////// OTHER SOURCES LISTED IN CODE   ///////////////////////////////////////
+///////////// DATE: 4/22/2021                /////////////////////////////////////// 
+
+
+
+///////////// Setting Up Initial Ints and Defining ///////////// 
+
+// ---- Motor Control ----
+  int ZeroSpeed = 2;        // White Wire of Black Button to Pin 2
+  int buttonStateOff = 0;   
+  int LowSpeed = 3;         // White Wire of White Button to Pin 3
+  int buttonStateLow = 0;
+  int HighSpeed = 4;        // White Wire of Yellow Button to Pin 4
+  int buttonStateHigh = 0;
+
+  #define MOTOR_IN1 5       // Motor Driver IN1 to Pin 5
+  #define MOTOR_IN2 11      // Motor Driver IN2 to Pin 11
+
+////////////////////////////////////////////////////////////
+
+//  ---- Sensor Control ----
+  #define dustPin A0 // Black wire from Sensor to Pin A0
+  #define ledPin 6  // White wire from Sensor to Pin 6
+
+  #define ANALOG_VOLTAGE 3.3 // analog top of range
+
+    // Yellow, Green wire connects to ground
+    // Blue wire connects to 5V via 150 ohm resistor and to Ground via 220uF Capacitor
+    // Red wire connects to 5V
+
+////////////////////////////////////////////////////////////
+
+// ---- LED ----
+  int redPin= 8; 
+  int greenPin = 9;
+  int bluePin = 10;
+
+  // Follow the Figure in the Build Process of the Final Report 
+
+////////////////////////////////////////////////////////////
+
+// ---- TIMER CONTROL INCLUDES/DEFINES ----
+  #include <EEPROM.h>
+  #define numberOfSeconds(_time_) ((_time_ / 1000) % 60)
+  #define numberOfMinutes(_time_) (((_time_ / 1000) / 60) % 60)
+  #define numberOfHours(_time_) (((_time_ / 1000) / 3600) % 60)
+  #define numberOfDays(_time_) (((_time_ / 1000) / 216000) % 60)
+  #define numberOfMonths(_time_) (((_time_ / 1000) / 12960000) % 60)
+
+
+//TIMER CONTROL INTS
+  unsigned long timelength;
+
+  // 1000ms in 1sec, 60secs in 1min, 60mins in 1hr. So, 1000X60X60x24x30x(Number of Months We Need: 1.657)
+  unsigned long timeLimit = 4294967295;
+  // Time is roughly 1.657 months which is the max value of an unsigned long in Arduino. 
+  // The timer will go through its cycle twice before needed to be reset. 
+  
+
+  
+/////////////////// ---- VOID SETUP ---- ////////////////////
+
+void setup() {
+
+  Serial.begin(9600);
+
+////////////////////////////////////////////////////////////
+
+  // ---- Motor Control ----
+     pinMode(ZeroSpeed, INPUT);
+     digitalWrite(ZeroSpeed, LOW); 
+     pinMode(LowSpeed, INPUT);
+     digitalWrite(LowSpeed, LOW);
+     pinMode(HighSpeed, INPUT);
+     digitalWrite(HighSpeed, LOW);
+
+     pinMode(MOTOR_IN1, OUTPUT);
+     pinMode(MOTOR_IN2, OUTPUT);
+
+     // Setting all of the speeds from the buttons to inputs with the initial state to Off
+     // and motor control from the driver to outputs
+
+  
+////////////////////////////////////////////////////////////
+
+
+  // ---- Sensor Control ----
+     while (!Serial) delay(100);
+     pinMode(ledPin, OUTPUT);
+
+    // Sensor set up to allow the LED to work properly
+     
+
+////////////////////////////////////////////////////////////
+
+ // ---- LED ----
+    pinMode(redPin, OUTPUT);
+    pinMode(greenPin, OUTPUT);
+    pinMode(bluePin, OUTPUT);
+
+    // Setting the RGB LED to an Output
+
+////////////////////////////////////////////////////////////
+
+  // ---- TIMER VOID SETUP ----
+
+  //EEPROM to save when power is off
+    timelength = EEPROM.read(0);
+
+  //write a 0 to address 0. This allows for consecutive resets to reset the counter
+    EEPROM.update(0,0);
+
+    // Timer set up using EEPROM so the timer can be saved if the device is turned off or unplugged
+
+
+////////////////////////////////////////////////////////////
+
+}
+
+
+/////////////////// ---- VOID LOOP ---- ////////////////////
+
+void loop(){
+  
+  // ---- Motor Control ----
+     buttonStateOff = digitalRead(ZeroSpeed);
+     buttonStateLow = digitalRead(LowSpeed);
+     buttonStateHigh = digitalRead(HighSpeed);
+ 
+  
+    if (ZeroSpeed == LOW) {
+        analogWrite(MOTOR_IN2, 0);
+        delay(10);
+        
+  }
+
+   if (LowSpeed == LOW) {
+      analogWrite(MOTOR_IN2, 127);
+      delay(10);
+     
+  }
+  
+   if (HighSpeed == LOW) {
+      analogWrite(MOTOR_IN2, 255);
+      delay(10);
+        
+  }
+
+  // Speed control using the buttons. If one button is pushed than the output speed of the motor will
+  // change to the designated speed set. 
+
+////////////////////////////////////////////////////////////
+
+  //Sensor Control
+    float output_voltage, dust_density;
+  
+    digitalWrite(ledPin, LOW); // power on the LED
+    delayMicroseconds(280); // Wait 0.28ms according to DS
+      // take analog reading
+    output_voltage = analogRead(dustPin); 
+    delay(1);
+  
+    digitalWrite(ledPin, HIGH); // turn the LED off
+
+    output_voltage = (output_voltage / 1023) * ANALOG_VOLTAGE;
+    dust_density = (0.18 * output_voltage) - 0.1;
+
+    Serial.print("Voltage = ");
+    Serial.print(output_voltage);
+    Serial.print(",\tParticle Density = ");
+    Serial.print(dust_density);
+    Serial.println(" mg/m3");
+    delay(1000);
+
+  // The source to this code can be found here: 
+  // https://github.com/adafruit/Adafruit_Learning_System_Guides/blob/master/GP2Y1014AU0F_demos/GP2Y1014AU/GP2Y1014AU.ino
+   
+////////////////////////////////////////////////////////////
+
+  //Timer
+
+    timer();  
+
+// Void Timer can be found below with further explination
+
+////////////////////////////////////////////////////////////
+
+  
+}
+
+/////////////////// ---- VOID TIMER ---- ////////////////////
+
+void timer(){
+  
+
+   EEPROM.update(0, timelength);
+   timelength = millis();
+   
+  if (timelength < timeLimit) {
+
+    //Display the Countdown in Minutes and Seconds
+    int seconds = numberOfSeconds(timelength);
+    int minutes = numberOfMinutes(timelength);
+    int hours = numberOfHours(timelength);
+    int days = numberOfDays(timelength);
+    int months = numberOfMonths(timelength);
+    
+    Serial.print ("Time: ");
+    Serial.print(months); Serial.print (":"); Serial.print(days); Serial.print (":"); Serial.print(hours); Serial.print (":"); 
+    Serial.print(minutes); Serial.print (":"); Serial.print(seconds); Serial.println();
+
+  }
+
+  // The timer will digitially display the time that the Arduino has been on until the time limit has been reached.
+  
+
+  // In the Default Running State the LED will light up Green
+   if(timelength < 3110400000) {
+    RGB_color(255, 0, 255); // Green
+  }
+  
+  // With two weeks remaining the LED will switch to Yellow indicate a replacement is soon needed
+    if(timelength > 3110400000) { ///// CHANGE FOR ACTUAL
+    RGB_color(0, 0, 255); // Yellow
+  }
+
+
+  // With one day remaining the LED with turn red to indicate it needs a replacement          
+     if(timelength > 4147200000) { ///// CHANGE FOR ACTUAL
+      
+     RGB_color(0, 255, 255); // Red
+     
+  }
+
+    
+  // With zero time left the air filter is in need of a replacement and the LED will blink Red
+  if(timelength == timeLimit) { ///// CHANGE FOR ACTUAL
+    RGB_color(0, 255, 255); // Red
+    delay(500);
+    RGB_color(0, 0, 0); // White
+    delay(500);
+  }
+
+  
+    delay(1000);
+}
+
+
+/////////////////// ---- VOID RGB COLOR ---- ////////////////////
+
+void RGB_color(int red, int green, int blue) {
+  analogWrite(redPin, red);
+  analogWrite(greenPin, green);
+  analogWrite(bluePin, blue);  
+}
+
+// Code to properly output the RGB colors with notes on how to properly change the colors below
+
+///// NOTES /////
+
+  //LED
+  
+ // RGB_color(255, 0, 0); // Cyan
+ // delay(1000);
+ // RGB_color(0, 255, 0); // Purple
+ // delay(1000);
+ // RGB_color(0, 0, 255); // Yellow
+ // delay(1000);
+ // RGB_color(255, 255, 125); // Blue
+ // delay(1000);
+ // RGB_color(0, 255, 255); // Red
+ // delay(1000);
+ // RGB_color(255, 0, 255); // Green
+ // delay(1000);
